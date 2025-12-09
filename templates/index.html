@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Subnet IP Scanner</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f2f5;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        input[type=text] {
+            padding: 8px;
+            font-size: 1rem;
+            width: 250px;
+        }
+        button {
+            padding: 8px 12px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        h3 {
+            margin-top: 25px;
+        }
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            grid-gap: 20px;
+            margin-top: 15px;
+        }
+        .tile {
+            border-radius: 10px;
+            padding: 15px 20px;
+            background: #ffffff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            border-left: 6px solid #ccc;
+            transition: 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tile.assigned {
+            border-left-color: #2ecc71;
+            background: #f7fff9;
+        }
+        .tile.unassigned {
+            border-left-color: #bdc3c7;
+            background: #fafafa;
+            opacity: 0.75;
+        }
+        .tile:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+        }
+        .tile h4 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .meta {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.3em;
+        }
+        .label {
+            font-weight: bold;
+        }
+        .icon-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .icon-title i {
+            font-size: 28px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 15px;
+            background: #fff;
+        }
+        th, td {
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background: #2c3e50;
+            color: #fff;
+        }
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h2>Subnet IP Scanner</h2>
+
+    <form method="POST">
+        <input type="text" name="subnet" placeholder="Enter subnet (e.g., 192.168.1.0/24)" required>
+        <button type="submit">Scan</button>
+    </form>
+
+    {% if error %}
+        <p style="color:red">{{ error }}</p>
+    {% endif %}
+
+{% if data %}
+    <h3>Scan Summary</h3>
+    <ul>
+        <li><strong>Total IPs:</strong> {{ summary.total }}</li>
+        <li><strong>Assigned IPs:</strong> {{ summary.assigned }}</li>
+        <li><strong>Unassigned IPs:</strong> {{ summary.unassigned }}</li>
+    </ul>
+
+    <!-- Assigned IPs as Tiles -->
+    {% set assigned_list = data | selectattr("assigned") | list %}
+    {% if assigned_list %}
+        <h3>Assigned Devices</h3>
+        <div class="grid-container">
+            {% for entry in assigned_list %}
+                <div class="tile assigned">
+                    <div class="icon-title">
+                        <i class="fa-solid {{ entry.icon }}"></i>
+                        <h4>{{ entry.ip }}</h4>
+                    </div>
+                    <div class="meta"><span class="label">MAC:</span> {{ entry.mac }}</div>
+                    <div class="meta"><span class="label">Vendor:</span> {{ entry.vendor }}</div>
+                    <div class="meta"><span class="label">Device Type:</span> {{ entry.device_type }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Unassigned IPs as Table -->
+    {% set unassigned_list = data | rejectattr("assigned") | list %}
+    {% if unassigned_list %}
+        <h3>Unassigned IPs</h3>
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Assigned</th>
+                    <th>MAC</th>
+                    <th>Vendor</th>
+                    <th>Device Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in unassigned_list %}
+                    <tr>
+                        <td>{{ entry.ip }}</td>
+                        <td>{{ 'Yes' if entry.assigned else 'No' }}</td>
+                        <td>{{ entry.mac }}</td>
+                        <td>{{ entry.vendor }}</td>
+                        <td>{{ entry.device_type }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endif %}
+
+</body>
+</html>
+
