@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 from scapy.all import ARP, Ether, srp
 from functools import lru_cache
+from mac_vendor_lookup import MacLookup
 import requests
 import ipaddress
 import os
@@ -8,21 +9,50 @@ import os
 app = Flask(__name__)
 
 # ----------------------------------
-# Vendor Lookup via macvendors.com
+# Vendor Lookup via local database
 # ----------------------------------
+# Initialize MacLookup
+mac_lookup = MacLookup()
+
+def update_vendor_db():
+    try:
+        print("Updating MAC Vendor Database...")
+        mac_lookup.update_vendors()
+        print("MAC Vendor Database updated.")
+    except Exception as e:
+        print(f"Failed to update MAC Vendor Database: {e}")
+
+# Check if we need to update (simple check if file exists approx logic, 
+# but the library handles caching. We'll force update on start if desired, 
+# or just let it use what it has. For robustness, let's try to load, 
+# and if it fails to find common vendors, we might want to update.
+# A safe bet is to try to update once on startup or let user trigger it.
+# For now, we will attempt to update if we can't find a common vendor or just once.)
+# Actually, the library keeps it in a standard location. 
+# Let's just try to update on startup in a non-blocking way or just synchronous for now.
+# Since this is a simple app, we can do it on module load if we want generally up to date info.
+try:
+    # Check if we can find a known MAC. If not, maybe we need to download.
+    mac_lookup.lookup("00:00:00:00:00:00")
+except Exception:
+    # If it fails significantly (like file missing), try update
+    update_vendor_db()
+
 @lru_cache(maxsize=5000)
 def lookup_vendor(mac):
+    """Return vendor information for a MAC address using local database.
+
+    Returns a dict: {"vendor": str, "carrier": str}
+    Carrier info is not provided by mac-vendor-lookup, so it will be '-'.
+    """
     if not mac or mac == "-":
-        return "Unknown Vendor"
+        return {"vendor": "Unknown Vendor", "carrier": "-"}
 
     try:
-        url = f"https://api.macvendors.com/{mac}"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            return response.text.strip()
-        return "Unknown Vendor"
+        vendor = mac_lookup.lookup(mac)
+        return {"vendor": vendor, "carrier": "-"}
     except Exception:
-        return "Unknown Vendor"
+        return {"vendor": "Unknown Vendor", "carrier": "-"}
 
 # ----------------------------------
 # Device Type Inference with Icons
@@ -99,7 +129,9 @@ def scan_subnet(subnet, timeout=2, max_hosts=1024):
         ip = received.psrc
         mac = received.hwsrc
 
-        vendor = lookup_vendor(mac)
+        vendor_info = lookup_vendor(mac)
+        vendor = vendor_info.get("vendor", "Unknown Vendor")
+        carrier = vendor_info.get("carrier", "-")
         dtype, icon = infer_device_type(vendor)
 
         active[ip] = {
@@ -107,6 +139,7 @@ def scan_subnet(subnet, timeout=2, max_hosts=1024):
             "assigned": True,
             "mac": mac,
             "vendor": vendor,
+            "carrier": carrier,
             "device_type": dtype,
             "icon": icon
         }
@@ -122,6 +155,7 @@ def scan_subnet(subnet, timeout=2, max_hosts=1024):
                 "assigned": False,
                 "mac": "-",
                 "vendor": "-",
+                "carrier": "-",
                 "device_type": "-",
                 "icon": "fa-circle-minus"
             })
